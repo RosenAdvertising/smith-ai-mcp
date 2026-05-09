@@ -103,16 +103,16 @@ def get_campaign(campaign_id: str) -> dict:
 
 
 @mcp.tool()
-def create_campaign(name: str, script: str, contacts_json: str) -> dict:
+def create_campaign(name: str, script: str, contacts: list) -> dict:
     """
     Create a new outbound call campaign.
 
     Args:
         name: Campaign name.
         script: Script or instructions the receptionist team will follow for each call.
-        contacts_json: JSON array of contact objects, e.g. '[{"name": "Jane Doe", "phone": "+15551234567"}]'.
+        contacts: Array of contact objects, e.g. [{"name": "Jane Doe", "phone": "+15551234567"}].
     """
-    return _client().create_campaign(name=name, script=script, contacts_json=contacts_json)
+    return _client().create_campaign(name=name, script=script, contacts=contacts)
 
 
 @mcp.tool()

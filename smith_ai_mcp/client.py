@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import json, os, sys, time, requests
+import os, sys, time, requests
 from pathlib import Path
 
 BASE_URL = "https://api.smith.ai"
@@ -95,8 +95,9 @@ class SmithAIClient:
     def get_campaign(self, campaign_id):
         return self.get(f"/campaigns/{campaign_id}")
 
-    def create_campaign(self, name, script, contacts_json):
-        contacts = json.loads(contacts_json)
+    def create_campaign(self, name, script, contacts):
+        if not isinstance(contacts, list):
+            raise ValueError("contacts must be a list")
         return self.post("/campaigns", body={"name": name, "script": script, "contacts": contacts})
 
     def update_campaign(self, campaign_id, name="", script="", status=""):

@@ -13,8 +13,10 @@ def main():
                 name = info.get("name") or info.get("account_name") or info.get("email", "")
                 if name:
                     print(f"Account: {name}")
-        except Exception:
-            pass
+        except RuntimeError as e:
+            msg = str(e)
+            if not any(code in msg for code in ("400", "404", "405")):
+                raise
         if not connected:
             try:
                 client.list_calls(limit=1)
