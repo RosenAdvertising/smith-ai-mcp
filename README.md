@@ -1,5 +1,11 @@
 # smith-ai-mcp
 
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-F59E0B.svg)](https://opensource.org/licenses/MIT)
+[![9 tools](https://img.shields.io/badge/tools-9-22C55E.svg)](https://github.com/RosenAdvertising/smith-ai-mcp)
+[![MCP](https://img.shields.io/badge/MCP-compatible-7C3AED.svg)](https://modelcontextprotocol.io)
+[![Smith.ai](https://img.shields.io/badge/Smith.ai-Hybrid%20Receptionist-1D4ED8.svg)](https://smith.ai)
+
 MCP server for [Smith.ai](https://smith.ai) — outbound call requests, campaign management, and call record retrieval.
 
 ## What Smith.ai is (and isn't)
