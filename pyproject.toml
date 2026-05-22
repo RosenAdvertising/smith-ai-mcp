@@ -13,3 +13,10 @@ dependencies = ["mcp>=1.0.0", "requests>=2.31.0", "python-dotenv>=1.0.0"]
 smith-ai-mcp = "smith_ai_mcp.server:main"
 smith-ai-mcp-setup = "smith_ai_mcp.setup.setup:main"
 smith-ai-mcp-verify = "smith_ai_mcp.setup.verify:main"
+
+[tool.pyright]
+include = ["."]
+exclude = ["**/node_modules", "**/__pycache__", ".venv", "venv", "dist", "build"]
+typeCheckingMode = "basic"
+reportMissingImports = "warning"
+reportMissingTypeStubs = false
