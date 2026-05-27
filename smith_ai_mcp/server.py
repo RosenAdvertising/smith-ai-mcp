@@ -7,6 +7,7 @@ Smith.ai human+AI hybrid receptionist integration: request outbound calls
 retrieve call records. Note: Smith.ai uses human receptionists + AI, not a
 configurable voice agent.
 """
+
 from mcp.server.fastmcp import FastMCP
 from smith_ai_mcp.client import SmithAIClient
 
@@ -20,6 +21,7 @@ mcp = FastMCP(
     ),
 )
 
+
 def _client():
     return SmithAIClient()
 
@@ -31,7 +33,9 @@ def get_account() -> dict:
 
 
 @mcp.tool()
-def list_calls(page: int = 1, limit: int = 25, date_from: str = "", date_to: str = "") -> dict:
+def list_calls(
+    page: int = 1, limit: int = 25, date_from: str = "", date_to: str = ""
+) -> dict:
     """
     List call records from Smith.ai.
 
@@ -41,7 +45,9 @@ def list_calls(page: int = 1, limit: int = 25, date_from: str = "", date_to: str
         date_from: Start date filter in YYYY-MM-DD format (optional).
         date_to: End date filter in YYYY-MM-DD format (optional).
     """
-    return _client().list_calls(page=page, limit=limit, date_from=date_from, date_to=date_to)
+    return _client().list_calls(
+        page=page, limit=limit, date_from=date_from, date_to=date_to
+    )
 
 
 @mcp.tool()

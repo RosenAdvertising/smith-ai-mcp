@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-import os, sys, time, requests
+import os
+import sys
+import time
+import requests
 from pathlib import Path
 
 BASE_URL = "https://api.smith.ai"
 CONFIG_DIR = Path.home() / ".smith-ai-mcp"
+
 
 def _load_env():
     env_file = CONFIG_DIR / ".env"
@@ -15,7 +19,9 @@ def _load_env():
                     key, val = line.split("=", 1)
                     os.environ.setdefault(key.strip(), val.strip())
 
+
 _load_env()
+
 
 def _retry_after_seconds(resp, default=10):
     try:
@@ -23,11 +29,15 @@ def _retry_after_seconds(resp, default=10):
     except (TypeError, ValueError):
         return default
 
+
 def _json_response(resp):
     try:
         return resp.json()
     except ValueError:
-        raise RuntimeError(f"Smith.ai API returned non-JSON ({resp.status_code}): {resp.text[:200]}")
+        raise RuntimeError(
+            f"Smith.ai API returned non-JSON ({resp.status_code}): {resp.text[:200]}"
+        )
+
 
 # Endpoints based on docs.smith.ai — verify paths before production use. Smith.ai docs are thin.
 class SmithAIClient:
@@ -36,11 +46,13 @@ class SmithAIClient:
         if not api_key:
             raise RuntimeError("No Smith.ai API key found. Run: smith-ai-mcp-setup")
         self.session = requests.Session()
-        self.session.headers.update({
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        })
+        self.session.headers.update(
+            {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
+        )
 
     def _request(self, method, path, params=None, json_body=None, _rate_retries=0):
         url = f"{BASE_URL}/{path.lstrip('/')}"
@@ -51,16 +63,29 @@ class SmithAIClient:
             wait = _retry_after_seconds(resp)
             print(f"Rate limited. Waiting {wait}s...", file=sys.stderr)
             time.sleep(wait)
-            return self._request(method, path, params=params, json_body=json_body, _rate_retries=_rate_retries + 1)
+            return self._request(
+                method,
+                path,
+                params=params,
+                json_body=json_body,
+                _rate_retries=_rate_retries + 1,
+            )
         if resp.status_code == 204:
             return {"success": True}
         if not resp.ok:
-            raise RuntimeError(f"Smith.ai API error {resp.status_code}: {resp.text[:400]}")
+            raise RuntimeError(
+                f"Smith.ai API error {resp.status_code}: {resp.text[:400]}"
+            )
         return _json_response(resp)
 
-    def get(self, path, params=None): return self._request("GET", path, params=params)
-    def post(self, path, body=None): return self._request("POST", path, json_body=body)
-    def patch(self, path, body=None): return self._request("PATCH", path, json_body=body)
+    def get(self, path, params=None):
+        return self._request("GET", path, params=params)
+
+    def post(self, path, body=None):
+        return self._request("POST", path, json_body=body)
+
+    def patch(self, path, body=None):
+        return self._request("PATCH", path, json_body=body)
 
     # Account
     def get_account(self):
@@ -78,7 +103,9 @@ class SmithAIClient:
     def get_call(self, call_id):
         return self.get(f"/calls/{call_id}")
 
-    def request_outbound_call(self, contact_name, phone_number, instructions="", priority="normal"):
+    def request_outbound_call(
+        self, contact_name, phone_number, instructions="", priority="normal"
+    ):
         body = {
             "contact_name": contact_name,
             "phone_number": phone_number,
@@ -98,7 +125,9 @@ class SmithAIClient:
     def create_campaign(self, name, script, contacts):
         if not isinstance(contacts, list):
             raise ValueError("contacts must be a list")
-        return self.post("/campaigns", body={"name": name, "script": script, "contacts": contacts})
+        return self.post(
+            "/campaigns", body={"name": name, "script": script, "contacts": contacts}
+        )
 
     def update_campaign(self, campaign_id, name="", script="", status=""):
         body = {}

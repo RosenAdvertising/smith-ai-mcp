@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
 import sys
 
+
 def main():
     try:
         from smith_ai_mcp.client import SmithAIClient
+
         client = SmithAIClient()
         connected = False
         try:
             info = client.get_account()
             connected = True
             if isinstance(info, dict):
-                name = info.get("name") or info.get("account_name") or info.get("email", "")
+                name = (
+                    info.get("name")
+                    or info.get("account_name")
+                    or info.get("email", "")
+                )
                 if name:
                     print(f"Account: {name}")
         except RuntimeError as e:
@@ -29,6 +35,7 @@ def main():
         print(f"Error: {e}")
         print("Run smith-ai-mcp-setup to configure your API key.")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

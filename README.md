@@ -73,17 +73,17 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ## Tools (9 total)
 
-| Tool | Description |
-|---|---|
-| `get_account` | Account info and settings |
-| `list_calls` | Paginated call records with optional date filters |
-| `get_call` | Single call record by ID |
-| `request_outbound_call` | Ask Smith to place an outbound call |
-| `list_campaigns` | List outreach campaigns |
-| `get_campaign` | Single campaign details |
-| `create_campaign` | Create a new outreach campaign |
-| `update_campaign` | Update name, script, or status |
-| `get_campaign_stats` | Campaign performance stats |
+| Tool                    | Description                                       |
+| ----------------------- | ------------------------------------------------- |
+| `get_account`           | Account info and settings                         |
+| `list_calls`            | Paginated call records with optional date filters |
+| `get_call`              | Single call record by ID                          |
+| `request_outbound_call` | Ask Smith to place an outbound call               |
+| `list_campaigns`        | List outreach campaigns                           |
+| `get_campaign`          | Single campaign details                           |
+| `create_campaign`       | Create a new outreach campaign                    |
+| `update_campaign`       | Update name, script, or status                    |
+| `get_campaign_stats`    | Campaign performance stats                        |
 
 ---
 
