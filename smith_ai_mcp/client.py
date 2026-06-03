@@ -93,7 +93,7 @@ class SmithAIClient:
 
     # Calls
     def list_calls(self, page=1, limit=25, date_from="", date_to=""):
-        params = {"page": page, "limit": limit}
+        params: dict[str, int | str] = {"page": page, "limit": limit}
         if date_from:
             params["date_from"] = date_from
         if date_to:
