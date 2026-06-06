@@ -7,7 +7,7 @@ name = "smith-ai-mcp"
 version = "0.1.0"
 description = "MCP server for Smith.ai — outbound call requests, campaign management, and call record retrieval for law firms"
 requires-python = ">=3.10"
-dependencies = ["mcp>=1.0.0", "requests>=2.31.0", "python-dotenv>=1.0.0"]
+dependencies = ["mcp>=1.0.0", "requests>=2.31.0", "python-dotenv>=1.2.2"]
 
 [project.scripts]
 smith-ai-mcp = "smith_ai_mcp.server:main"
