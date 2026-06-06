@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main, master]
 
+permissions:
+  contents: read
+
 jobs:
   ci:
     uses: RosenAdvertising/fleet-ci/.github/workflows/ci.yml@v1
