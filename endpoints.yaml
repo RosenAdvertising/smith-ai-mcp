@@ -1,0 +1,19 @@
+tools:
+  - name: get_account
+    read_write: read
+  - name: list_calls
+    read_write: read
+  - name: get_call
+    read_write: read
+  - name: request_outbound_call
+    read_write: write
+  - name: list_campaigns
+    read_write: read
+  - name: get_campaign
+    read_write: read
+  - name: create_campaign
+    read_write: write
+  - name: update_campaign
+    read_write: write
+  - name: get_campaign_stats
+    read_write: read
