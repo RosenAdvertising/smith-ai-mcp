@@ -3,12 +3,9 @@
 smith-ai-mcp setup — configure API key and verify connection.
 """
 
-import os
 import sys
-from pathlib import Path
 
-CONFIG_DIR = Path.home() / ".smith-ai-mcp"
-ENV_FILE = CONFIG_DIR / ".env"
+from smith_ai_mcp import credentials
 
 
 def main():
@@ -18,14 +15,7 @@ def main():
     print("Get your API key at: smith.ai → Dashboard → Settings → API")
     print()
 
-    existing_key = ""
-    if ENV_FILE.exists():
-        with open(ENV_FILE) as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith("SMITH_API_KEY="):
-                    existing_key = line.split("=", 1)[1].strip()
-                    break
+    existing_key = credentials.get_secret("SMITH_API_KEY")
 
     if existing_key:
         masked = (
@@ -51,16 +41,12 @@ def main():
             print("No API key provided. Exiting.")
             sys.exit(1)
 
-    # Save to config dir
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    CONFIG_DIR.chmod(0o700)
-    # Credentials are stored in a chmod-0600 file. A pluggable OS-keyring backend
-    # (macOS Keychain / Windows Credential Manager / Linux Secret Service) is being
-    # evaluated as optional hardening; see the "pluggable OS-keyring" MCP task.
-    with open(ENV_FILE, "w") as f:
-        f.write(f"SMITH_API_KEY={api_key}\n")
-    os.chmod(ENV_FILE, 0o600)
-    print(f"API key saved to {ENV_FILE}")
+    # Persist through the pluggable store (OS keyring by default).
+    backend = credentials.set_secret("SMITH_API_KEY", api_key)
+    if backend == "keyring":
+        print(f"API key saved to the OS keyring ({credentials.storage_backend()}).")
+    else:
+        print(f"API key saved to {credentials.ENV_FILE} (0600).")
     print()
 
     # Run verify

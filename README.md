@@ -43,7 +43,8 @@ pip install -e .
 smith-ai-mcp-setup
 ```
 
-This prompts for your API key, saves it to `~/.smith-ai-mcp/.env`, and verifies the connection.
+This prompts for your API key, saves it to your OS keyring (see
+[Credential storage](#credential-storage)), and verifies the connection.
 
 Get your API key at: **smith.ai → Dashboard → Settings → API**
 
@@ -89,7 +90,45 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ## Auth
 
-Bearer token via `Authorization: Bearer {SMITH_API_KEY}`. Key is loaded from `~/.smith-ai-mcp/.env` at startup, with fallback to the `SMITH_API_KEY` environment variable.
+Bearer token via `Authorization: Bearer {SMITH_API_KEY}`. At startup the key is
+resolved in the order **OS keyring → `SMITH_API_KEY` environment variable →
+`~/.smith-ai-mcp/.env` file**. See [Credential storage](#credential-storage) for
+how it is stored and how to point at your own secret backend.
+
+---
+
+## Credential storage
+
+By default your API key (`SMITH_API_KEY`) is stored in your operating system's
+native secret store via the cross-platform
+[`keyring`](https://github.com/jaraco/keyring) library:
+
+| OS      | Backend                                  |
+| ------- | ---------------------------------------- |
+| macOS   | Keychain                                 |
+| Windows | Credential Manager                       |
+| Linux   | Secret Service (GNOME Keyring / KWallet) |
+
+The secret is saved under the service name `smith-ai-mcp`. Nothing is written to
+disk in clear text.
+
+**File fallback.** On a host with no keyring backend (e.g. a headless Linux box
+without Secret Service), or if you set `SMITH_AI_MCP_USE_KEYRING=0`, the key
+falls back to a `~/.smith-ai-mcp/.env` file with `0600` permissions:
+
+```text
+SMITH_API_KEY=your_api_key
+```
+
+**Read order.** Values resolve in the order OS keyring → process environment →
+`.env` file. So a rotated key in the keyring always wins, and a value exported in
+your shell overrides the file fallback without touching the keyring.
+
+**Pluggable backend.** `keyring` lets you point at any secret store. For example,
+install [`keyrings.cryptfile`](https://pypi.org/project/keyrings.cryptfile/) for
+an encrypted file backend, or a cloud backend, then select it with the standard
+`PYTHON_KEYRING_BACKEND` environment variable or a `keyringrc.cfg`. See the
+[keyring configuration docs](https://github.com/jaraco/keyring#configuring).
 
 ---
 
