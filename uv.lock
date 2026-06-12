@@ -1075,7 +1075,7 @@ requires-dist = [
     { name = "keyring", specifier = ">=25.7.0" },
     { name = "mcp", specifier = ">=1.27.2" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
-    { name = "requests", specifier = ">=2.31.0" },
+    { name = "requests", specifier = ">=2.34.2" },
 ]
 
 [[package]]

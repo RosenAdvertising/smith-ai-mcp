@@ -9,7 +9,7 @@ description = "MCP server for Smith.ai — outbound call requests, campaign mana
 requires-python = ">=3.10"
 dependencies = [
     "mcp>=1.27.2",
-    "requests>=2.31.0",
+    "requests>=2.34.2",
     "python-dotenv>=1.2.2",
     "keyring>=25.7.0",
 ]
