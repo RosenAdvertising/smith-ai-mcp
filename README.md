@@ -6,6 +6,12 @@
 [![MCP](https://img.shields.io/badge/MCP-compatible-7C3AED.svg)](https://modelcontextprotocol.io)
 [![Smith.ai](https://img.shields.io/badge/Smith.ai-Hybrid%20Receptionist-1D4ED8.svg)](https://smith.ai)
 
+<!-- prettier-ignore -->
+> [!IMPORTANT]
+> **Built to spec — not yet verified against a live Smith.ai account.**
+> This server was built from Smith.ai's public API documentation and passes its full offline test suite, but we don't currently have Smith.ai API access to verify behavior against the live API. Endpoint paths, parameters, and response shapes follow the documented spec. If you hit a discrepancy, please open an issue.
+> Smith.ai's public API documentation is minimal; endpoint paths are based on docs.smith.ai and are low-confidence. Treat this server as experimental until verified against a live account.
+
 MCP server for [Smith.ai](https://smith.ai) — outbound call requests, campaign management, and call record retrieval.
 
 ## What Smith.ai is (and isn't)
