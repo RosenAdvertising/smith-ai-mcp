@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import sys
 
 
@@ -9,16 +8,8 @@ def main():
         client = SmithAIClient()
         connected = False
         try:
-            info = client.get_account()
+            client.get_account()
             connected = True
-            if isinstance(info, dict):
-                name = (
-                    info.get("name")
-                    or info.get("account_name")
-                    or info.get("email", "")
-                )
-                if name:
-                    print(f"Account: {name}")
         except RuntimeError as e:
             msg = str(e)
             if not any(code in msg for code in ("400", "404", "405")):
@@ -27,12 +18,12 @@ def main():
             try:
                 client.list_calls(limit=1)
                 connected = True
-            except Exception as e2:
-                raise RuntimeError(str(e2))
+            except Exception as exc:
+                raise RuntimeError("Smith.ai verification failed") from exc
         print("Connected to Smith.ai.")
         print("smith-ai-mcp is ready.")
-    except Exception as e:
-        print(f"Error: {e}")
+    except Exception:  # noqa: BLE001 - final CLI boundary exits safely
+        print("Error: Smith.ai verification failed.")
         print("Run smith-ai-mcp-setup to configure your API key.")
         sys.exit(1)
 

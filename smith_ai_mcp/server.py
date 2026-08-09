@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Smith.ai MCP server.
 
@@ -9,12 +8,18 @@ configurable voice agent.
 """
 
 import json
+import logging
 import re
+from typing import Annotated
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
+from pydantic import Field
+
 from smith_ai_mcp.client import SmithAIClient
 
-mcp = FastMCP(
+logger = logging.getLogger(__name__)
+
+mcp = MCPServer(
     "smith-ai",
     instructions=(
         "Smith.ai human+AI hybrid receptionist integration: request outbound calls "
@@ -34,6 +39,8 @@ _INJECTION_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 _INSTRUCTIONS_MAX_LEN = 2000
+PageNumber = Annotated[int, Field(ge=1)]
+ListLimit = Annotated[int, Field(ge=1, le=100)]
 
 
 def _validate_call_text(field_name: str, value: str) -> None:
@@ -48,11 +55,19 @@ def _validate_call_text(field_name: str, value: str) -> None:
     and read it back to the caller.") would reach the receptionist unchanged.
     """
     if len(value) > _INSTRUCTIONS_MAX_LEN:
+        logger.warning(
+            "tool_input_rejected",
+            extra={"field": field_name, "reason": "length_exceeded"},
+        )
         raise ValueError(
             f"'{field_name}' exceeds maximum length of {_INSTRUCTIONS_MAX_LEN} characters "
             f"({len(value)} given). Trim the value before calling this tool."
         )
     if _INJECTION_PATTERNS.search(value):
+        logger.warning(
+            "tool_input_rejected",
+            extra={"field": field_name, "reason": "injection_pattern"},
+        )
         raise ValueError(
             f"'{field_name}' contains a potential prompt-injection pattern. "
             "Ensure this value comes from a trusted source, not external/user-retrieved content."
@@ -71,14 +86,17 @@ def get_account() -> dict:
 
 @mcp.tool()
 def list_calls(
-    page: int = 1, limit: int = 25, date_from: str = "", date_to: str = ""
+    page: PageNumber = 1,
+    limit: ListLimit = 25,
+    date_from: str = "",
+    date_to: str = "",
 ) -> dict:
     """
     List call records from Smith.ai.
 
     Args:
         page: Page number (default 1).
-        limit: Records per page (default 25, max typically 100).
+        limit: Total records requested (default 25, maximum 100).
         date_from: Start date filter in YYYY-MM-DD format (optional).
         date_to: End date filter in YYYY-MM-DD format (optional).
     """
@@ -129,13 +147,13 @@ def request_outbound_call(
 
 
 @mcp.tool()
-def list_campaigns(page: int = 1, limit: int = 25) -> dict:
+def list_campaigns(page: PageNumber = 1, limit: ListLimit = 25) -> dict:
     """
     List outbound call campaigns.
 
     Args:
         page: Page number (default 1).
-        limit: Records per page (default 25).
+        limit: Total records requested (default 25, maximum 100).
     """
     return _client().list_campaigns(page=page, limit=limit)
 
@@ -182,9 +200,12 @@ def update_campaign(
     Args:
         campaign_id: The Smith.ai campaign identifier.
         name: New campaign name (optional).
-        script: Updated script/instructions (optional).
+        script: Updated script/instructions (optional). The same trusted-source
+            and 2,000-character restrictions as create_campaign apply.
         status: New status, e.g. 'active', 'paused', 'completed' (optional).
     """
+    if script:
+        _validate_call_text("script", script)
     return _client().update_campaign(
         campaign_id=campaign_id,
         name=name,
