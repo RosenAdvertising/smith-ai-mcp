@@ -21,6 +21,9 @@ smith-ai-mcp = "smith_ai_mcp.server:main"
 smith-ai-mcp-setup = "smith_ai_mcp.setup.setup:main"
 smith-ai-mcp-verify = "smith_ai_mcp.setup.verify:main"
 
+[dependency-groups]
+dev = ["httpx>=0.28,<1", "pytest>=8.4,<9"]
+
 [tool.pyright]
 include = ["."]
 exclude = ["**/node_modules", "**/__pycache__", ".venv", "venv", "dist", "build"]
