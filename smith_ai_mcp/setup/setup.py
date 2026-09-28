@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 smith-ai-mcp setup — configure API key and verify connection.
 """
@@ -18,12 +17,7 @@ def main():
     existing_key = credentials.get_secret("SMITH_API_KEY")
 
     if existing_key:
-        masked = (
-            existing_key[:4] + "..." + existing_key[-4:]
-            if len(existing_key) > 8
-            else "****"
-        )
-        prompt = f"API key [{masked}] (press Enter to keep): "
+        prompt = "API key configured (press Enter to keep): "
     else:
         prompt = "Enter your Smith.ai API key: "
 

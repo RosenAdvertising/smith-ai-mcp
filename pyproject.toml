@@ -10,6 +10,7 @@ license = { text = "MIT" }
 requires-python = ">=3.10"
 dependencies = [
     "mcp>=1.28.1,<2",
+    "pydantic>=2.12,<3",
     "requests>=2.34.2",
     "python-dotenv>=1.2.2",
     "keyring>=25.7.0",
@@ -19,6 +20,9 @@ dependencies = [
 smith-ai-mcp = "smith_ai_mcp.server:main"
 smith-ai-mcp-setup = "smith_ai_mcp.setup.setup:main"
 smith-ai-mcp-verify = "smith_ai_mcp.setup.verify:main"
+
+[dependency-groups]
+dev = ["httpx>=0.28,<1", "pytest>=8.4,<9"]
 
 [tool.pyright]
 include = ["."]

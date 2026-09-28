@@ -1,12 +1,14 @@
-#!/usr/bin/env python3
+import logging
 import os
 import sys
 import time
+
 import requests
 
 from smith_ai_mcp import credentials
 
 BASE_URL = "https://api.smith.ai"
+logger = logging.getLogger(__name__)
 
 # Resolve credentials through the pluggable store (OS keyring -> .env file).
 credentials.load_into_environ(["SMITH_API_KEY"])
@@ -22,10 +24,14 @@ def _retry_after_seconds(resp, default=10):
 def _json_response(resp):
     try:
         return resp.json()
-    except ValueError:
-        raise RuntimeError(
-            f"Smith.ai API returned non-JSON ({resp.status_code}): {resp.text[:200]}"
+    except ValueError as exc:
+        logger.warning(
+            "smith_api_response_rejected",
+            extra={"reason": "non_json", "status": resp.status_code},
         )
+        raise RuntimeError(
+            f"Smith.ai API returned a non-JSON response ({resp.status_code})"
+        ) from exc
 
 
 # Endpoints based on docs.smith.ai — verify paths before production use. Smith.ai docs are thin.
@@ -33,6 +39,9 @@ class SmithAIClient:
     def __init__(self):
         api_key = os.environ.get("SMITH_API_KEY", "")
         if not api_key:
+            logger.warning(
+                "smith_api_request_rejected", extra={"reason": "missing_api_key"}
+            )
             raise RuntimeError("No Smith.ai API key found. Run: smith-ai-mcp-setup")
         self.session = requests.Session()
         self.session.headers.update(
@@ -47,6 +56,10 @@ class SmithAIClient:
         url = f"{BASE_URL}/{path.lstrip('/')}"
         resp = self.session.request(method, url, params=params, json=json_body)
         if resp.status_code == 401:
+            logger.warning(
+                "smith_api_request_rejected",
+                extra={"reason": "invalid_api_key", "status": 401},
+            )
             raise RuntimeError("Smith.ai API key invalid. Run: smith-ai-mcp-setup")
         if resp.status_code == 429 and _rate_retries < 3:
             wait = _retry_after_seconds(resp)
@@ -62,9 +75,11 @@ class SmithAIClient:
         if resp.status_code == 204:
             return {"success": True}
         if not resp.ok:
-            raise RuntimeError(
-                f"Smith.ai API error {resp.status_code}: {resp.text[:400]}"
+            logger.warning(
+                "smith_api_request_rejected",
+                extra={"reason": "upstream_error", "status": resp.status_code},
             )
+            raise RuntimeError(f"Smith.ai API error {resp.status_code}")
         return _json_response(resp)
 
     def get(self, path, params=None):
@@ -113,7 +128,11 @@ class SmithAIClient:
 
     def create_campaign(self, name, script, contacts):
         if not isinstance(contacts, list):
-            raise ValueError("contacts must be a list")
+            logger.warning(
+                "tool_input_rejected",
+                extra={"field": "contacts", "reason": "invalid_type"},
+            )
+            raise TypeError("contacts must be a list")
         return self.post(
             "/campaigns", body={"name": name, "script": script, "contacts": contacts}
         )
