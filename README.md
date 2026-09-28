@@ -14,6 +14,8 @@
 
 MCP server for [Smith.ai](https://smith.ai) — outbound call requests, campaign management, and call record retrieval.
 
+Requires Python MCP SDK `>=2.2,<3` for the MCP 2026-07-28 protocol support.
+
 ## What Smith.ai is (and isn't)
 
 Smith.ai is a **human + AI hybrid receptionist service**. Real receptionists — assisted by AI — handle your calls. This is not a configurable voice AI agent. You cannot program call routing logic, change IVR trees, or provision phone numbers through the API.
