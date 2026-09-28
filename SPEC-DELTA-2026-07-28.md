@@ -1,29 +1,20 @@
 # MCP specification delta: 2025-11-25 to 2026-07-28
 
-Research date: 2026-08-09. Sources are limited to the official MCP
-specification and the official MCP Python SDK repository/documentation.
+This note maps protocol changes to the server. The Python SDK requirement is
+`mcp>=2.2,<3`; `uv.lock` resolves both `mcp` and `mcp-types` to `2.2.0`.
+Offline reproduction commands are in [the migration report](SPEC-MIGRATION-REPORT.md).
 
-## Current target and migration release
+## Protocol target
 
-This repository currently targets MCP `2025-11-25`:
-
-- `pyproject.toml` declares `mcp>=1.28.1,<2`, and `uv.lock` resolves MCP Python
-  SDK 1.28.1. Its installed `LATEST_PROTOCOL_VERSION` is `2025-11-25`.
-- `smith_ai_mcp/server.py` constructs the v1 `FastMCP` server and calls its
-  default stdio `run()` transport. It does not override protocol negotiation.
-- The repository has no tracked protocol-version guard or protocol tests.
-
-The official changelog says `2026-07-28` follows `2025-11-25`
-([spec changelog](https://modelcontextprotocol.io/specification/2026-07-28/changelog)).
-The implementation release is MCP Python SDK `2.0.0`, which supports
-`2026-07-28` and earlier revisions from one server
-([SDK release](https://github.com/modelcontextprotocol/python-sdk/releases/tag/v2.0.0),
-[migration guide](https://py.sdk.modelcontextprotocol.io/migration/)).
+The SDK's `MCPServer` serves the `2026-07-28` protocol and retains legacy
+`2025-11-25` negotiation. The tracked guard pins the installed SDK's latest
+and modern protocol versions. See the [spec changelog](https://modelcontextprotocol.io/specification/2026-07-28/changelog)
+and [SDK migration guide](https://py.sdk.modelcontextprotocol.io/migration/).
 
 Verdicts below mean:
 
 - **AFFECTS-US**: this server exposes or relies on the changed surface. The SDK
-  may implement the wire behavior, but the migration must pin or test it.
+  implements some wire behavior; offline tests cover the listed mappings.
 - **NOT-APPLICABLE**: the feature or role is absent. This migration will not
   add it solely because the new revision permits it.
 
@@ -42,7 +33,7 @@ Verdicts below mean:
 
 | Change | Verdict | Repository-specific reason |
 | --- | --- | --- |
-| Streamable HTTP POST requires `Mcp-Method` and, for named operations, `Mcp-Name`; `x-mcp-header` is available. | **AFFECTS-US** | The current executable is stdio-only, but SDK v2's raw HTTP application is the conformance surface for testing the protocol kernel and required headers. No tool parameter needs `x-mcp-header`. |
+| Streamable HTTP POST requires `Mcp-Method` and, for named operations, `Mcp-Name`; `x-mcp-header` is available. | **AFFECTS-US** | The executable is stdio-only, but SDK v2's raw HTTP application provides the in-process protocol test surface. No tool parameter needs `x-mcp-header`. |
 | Standalone HTTP GET and resource subscribe/unsubscribe become `subscriptions/listen`. | **AFFECTS-US** | The high-level SDK advertises resource subscription and list-change capabilities. Preserve its dual-era mapping without adding an application publisher, bus, or event store. |
 | SSE resumability and redelivery are removed. | **NOT-APPLICABLE** | No event store or resumability behavior exists. |
 | Legacy HTTP+SSE is deprecated. | **NOT-APPLICABLE** | The application exposes stdio only; raw Streamable HTTP is used only in tests. |
@@ -83,6 +74,4 @@ Verdicts below mean:
 | Reserved errors include HeaderMismatch `-32020`, MissingRequiredClientCapability `-32021`, and UnsupportedProtocolVersion `-32022`; unknown methods use `-32601`. | **AFFECTS-US** | SDK v2 must return the new codes. Tests cover reachable cases without inventing a capability-dependent feature solely to trigger `-32021`. |
 | `_meta` formally carries W3C trace context. | **NOT-APPLICABLE** | No MCP `_meta` tracing integration exists; this migration will not add an observability feature. |
 
-Governance and SEP workflow changes impose no runtime requirement. The formal
-feature lifecycle is respected by not adopting deprecated Roots, Sampling,
-Logging, HTTP+SSE, or DCR.
+Governance and SEP workflow changes impose no runtime requirement.
