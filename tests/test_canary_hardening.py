@@ -7,6 +7,7 @@ import logging
 from typing import Any
 
 import pytest
+import requests
 from mcp.server.mcpserver.exceptions import ToolError
 
 from smith_ai_mcp import client as client_module
@@ -50,10 +51,8 @@ def test_list_tools_reject_out_of_range_controls(
     tool_name: str, arguments: dict[str, int]
 ) -> None:
     async def run_tool() -> None:
-        tool = server.mcp._tool_manager.get_tool(tool_name)
-        assert tool is not None
         with pytest.raises(ToolError, match="validation error"):
-            await tool.run(arguments, None)
+            await server.mcp.call_tool(tool_name, arguments)
 
     asyncio.run(run_tool())
 
@@ -76,8 +75,8 @@ def test_call_text_rejections_log_only_safe_reason(
         record for record in caplog.records if record.msg == "tool_input_rejected"
     ]
     assert records
-    assert records[-1].field == "script"
-    assert records[-1].reason == reason
+    assert records[-1].__dict__["field"] == "script"
+    assert records[-1].__dict__["reason"] == reason
     assert marker not in caplog.text
 
 
@@ -94,8 +93,8 @@ def test_update_campaign_validates_script_before_client_call(
 
     assert any(
         record.msg == "tool_input_rejected"
-        and record.field == "script"
-        and record.reason == "injection_pattern"
+        and record.__dict__["field"] == "script"
+        and record.__dict__["reason"] == "injection_pattern"
         for record in caplog.records
     )
 
@@ -112,17 +111,16 @@ def test_invalid_contacts_rejection_has_pii_free_log(
     record = next(
         record for record in caplog.records if record.msg == "tool_input_rejected"
     )
-    assert record.field == "contacts"
-    assert record.reason == "invalid_type"
+    assert record.__dict__["field"] == "contacts"
+    assert record.__dict__["reason"] == "invalid_type"
     assert marker not in caplog.text
 
 
-class FakeResponse:
+class FakeResponse(requests.Response):
     def __init__(self, status_code: int, text: str, *, json_error: bool = False):
+        super().__init__()
         self.status_code = status_code
-        self.text = text
-        self.ok = 200 <= status_code < 300
-        self.headers: dict[str, str] = {}
+        self._content = text.encode()
         self._json_error = json_error
 
     def json(self) -> dict[str, Any]:
@@ -131,11 +129,11 @@ class FakeResponse:
         return {"ok": True}
 
 
-class FakeSession:
+class FakeSession(requests.Session):
     def __init__(self, response: FakeResponse):
         self.response = response
 
-    def request(self, *_args, **_kwargs) -> FakeResponse:
+    def request(self, *_args: Any, **_kwargs: Any) -> FakeResponse:
         return self.response
 
 
@@ -167,7 +165,9 @@ def test_upstream_response_bodies_never_reach_errors_or_logs(
 
     assert marker not in str(exc_info.value)
     assert marker not in caplog.text
-    assert any(record.reason == expected_reason for record in caplog.records)
+    assert any(
+        record.__dict__.get("reason") == expected_reason for record in caplog.records
+    )
 
 
 def test_verify_does_not_print_account_identity(
