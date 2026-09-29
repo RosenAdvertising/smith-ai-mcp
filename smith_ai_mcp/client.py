@@ -55,22 +55,57 @@ credentials.load_into_environ(["SMITH_API_KEY"])
 def _retry_after_seconds(resp, default=10):
     try:
         value = int(resp.headers.get("Retry-After", default))
-        return value if 0 <= value <= 3600 else default
+        return value if 1 <= value <= 3600 else default
     except (TypeError, ValueError):
         return default
+
+
+_SAFE_HTTP_REASONS = {
+    400: "request rejected",
+    409: "conflict",
+    422: "request rejected",
+    500: "service unavailable",
+    502: "service unavailable",
+    503: "service unavailable",
+    504: "service unavailable",
+}
+_SAFE_VENDOR_REASONS = {
+    "invalid_request": "invalid request",
+    "validation_error": "validation failed",
+    "invalid_parameter": "invalid parameter",
+    "conflict": "conflict",
+    "service_unavailable": "service unavailable",
+    "service unavailable": "service unavailable",
+}
+
+
+def _vendor_reason(response):
+    """Only fixed, recognized vendor codes may contribute to public messages."""
+    fallback = _SAFE_HTTP_REASONS.get(response.status_code, "request failed")
+    try:
+        data = response.json()
+    except ValueError:
+        return fallback
+    if not isinstance(data, dict):
+        return fallback
+    for source in (data, data.get("error")):
+        if isinstance(source, dict):
+            for key in ("code", "error_code", "error", "message", "detail"):
+                value = source.get(key)
+                if isinstance(value, str) and value.lower() in _SAFE_VENDOR_REASONS:
+                    return _SAFE_VENDOR_REASONS[value.lower()]
+    return fallback
 
 
 def _json_response(resp):
     try:
         return resp.json()
-    except ValueError as exc:
+    except ValueError:
         logger.warning(
             "smith_api_response_rejected",
             extra={"reason": "non_json", "status": resp.status_code},
         )
-        raise RuntimeError(
-            f"Smith.ai API returned a non-JSON response ({resp.status_code})"
-        ) from exc
+        raise VendorHTTPError(resp.status_code, "invalid JSON response") from None
 
 
 # Endpoints based on docs.smith.ai — verify paths before production use. Smith.ai docs are thin.
@@ -94,10 +129,10 @@ class SmithAIClient:
     def _request(self, method, path, params=None, json_body=None, _rate_retries=0):
         url = f"{BASE_URL}/{path.lstrip('/')}"
         resp = self.session.request(method, url, params=params, json=json_body)
-        if resp.status_code == 401:
+        if resp.status_code in (401, 403):
             logger.warning(
                 "smith_api_request_rejected",
-                extra={"reason": "invalid_api_key", "status": 401},
+                extra={"reason": "invalid_api_key", "status": resp.status_code},
             )
             raise AuthenticationError("authentication_rejected")
         if resp.status_code == 429 and _rate_retries < 3:
@@ -122,19 +157,7 @@ class SmithAIClient:
                 "smith_api_request_rejected",
                 extra={"reason": "upstream_error", "status": resp.status_code},
             )
-            safe_reasons = {
-                400: "request rejected",
-                403: "access denied",
-                409: "conflict",
-                422: "request rejected",
-                500: "service unavailable",
-                502: "service unavailable",
-                503: "service unavailable",
-                504: "service unavailable",
-            }
-            raise VendorHTTPError(
-                resp.status_code, safe_reasons.get(resp.status_code, "request failed")
-            )
+            raise VendorHTTPError(resp.status_code, _vendor_reason(resp))
         return _json_response(resp)
 
     def get(self, path, params=None):
