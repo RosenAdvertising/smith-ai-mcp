@@ -12,6 +12,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from requests.structures import CaseInsensitiveDict
 
 from smith_ai_mcp import client as client_module
+from smith_ai_mcp import credentials
 from smith_ai_mcp import server
 from smith_ai_mcp.client import (
     AuthenticationError,
@@ -292,6 +293,23 @@ def test_setup_bad_key_exits_without_traceback(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "verification failed" in output
     assert "Traceback" not in output
+
+
+def test_fallback_token_file_is_private_when_created_and_updated(tmp_path, monkeypatch):
+    config_dir = tmp_path / ".smith-ai-mcp"
+    env_file = config_dir / ".env"
+    monkeypatch.setattr(credentials, "CONFIG_DIR", config_dir)
+    monkeypatch.setattr(credentials, "ENV_FILE", env_file)
+
+    credentials._write_env_file({"SMITH_API_KEY": "fake-token"})
+    assert env_file.read_text() == "SMITH_API_KEY=fake-token\n"
+    assert env_file.stat().st_mode & 0o777 == 0o600
+    assert config_dir.stat().st_mode & 0o777 == 0o700
+
+    env_file.chmod(0o644)
+    credentials._write_env_file({"SMITH_API_KEY": "replacement-fake-token"})
+    assert env_file.stat().st_mode & 0o777 == 0o600
+    assert env_file.read_text() == "SMITH_API_KEY=replacement-fake-token\n"
 
 
 def test_resource_error_boundary_masks_exception_chain(monkeypatch, caplog):
