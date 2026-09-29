@@ -154,7 +154,12 @@ class SmithAIClient:
         url = f"{BASE_URL}/{path.lstrip('/')}"
         try:
             resp = self.session.request(
-                method, url, params=params, json=json_body, timeout=30
+                method,
+                url,
+                params=params,
+                json=json_body,
+                timeout=30,
+                allow_redirects=False,
             )
         except (requests.Timeout, requests.ConnectionError):
             logger.warning(
@@ -191,6 +196,12 @@ class SmithAIClient:
             raise RateLimitError(_retry_after_seconds(resp))
         if resp.status_code == 404:
             raise NotFoundError(resp.status_code)
+        if 300 <= resp.status_code < 400:
+            logger.warning(
+                "smith_api_request_rejected",
+                extra={"reason": "redirect_rejected", "status": resp.status_code},
+            )
+            raise VendorHTTPError(resp.status_code, "redirect rejected")
         if resp.status_code == 204:
             return {"success": True}
         if not resp.ok:

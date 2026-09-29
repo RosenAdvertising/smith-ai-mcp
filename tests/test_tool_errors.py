@@ -214,6 +214,29 @@ def test_all_http_requests_have_timeout(monkeypatch, method):
     monkeypatch.setattr(instance.session, "request", request)
     instance._request(method, "/account")
     assert seen["timeout"] == 30
+    assert seen["allow_redirects"] is False
+
+
+@pytest.mark.parametrize("status", [301, 302, 307, 308])
+def test_redirects_are_not_followed_or_returned_as_success(monkeypatch, status):
+    instance = object.__new__(client_module.SmithAIClient)
+    instance.session = requests.Session()
+    seen = {}
+    response = requests.Response()
+    response.status_code = status
+    response.headers["Location"] = "https://private.invalid/redirect-target"
+    response._content = b'{"success": true}'
+
+    def request(_method, _url, **kwargs):
+        seen.update(kwargs)
+        return response
+
+    monkeypatch.setattr(instance.session, "request", request)
+    with pytest.raises(VendorHTTPError) as caught:
+        instance.get("/account")
+    assert seen["allow_redirects"] is False
+    assert caught.value.status == status
+    assert str(caught.value) == "redirect rejected"
 
 
 @pytest.mark.parametrize(
