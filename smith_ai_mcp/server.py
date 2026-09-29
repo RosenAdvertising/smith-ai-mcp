@@ -23,8 +23,8 @@ from pydantic import Field, ValidationError
 
 from smith_ai_mcp.client import (
     ACCESS_DENIED_MESSAGE,
-    AuthenticationError,
     ArgumentValidationError,
+    AuthenticationError,
     ContactsValidationError,
     MissingCredentialsError,
     NotFoundError,
@@ -104,7 +104,7 @@ class SafeMCPServer(MCPServer):
             return await super().read_resource(uri, context)
         except ResourceNotFoundError:
             raise ResourceNotFoundError("Smith.ai resource was not found.") from None
-        except Exception:
+        except Exception:  # noqa: BLE001 - resource boundary hides all unexpected details
             logger.warning("resource_error_masked reason=unexpected_error")
             raise ResourceError("Error reading Smith.ai resource.") from None
 

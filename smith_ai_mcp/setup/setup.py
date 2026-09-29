@@ -2,8 +2,8 @@
 smith-ai-mcp setup — configure API key and verify connection.
 """
 
-from getpass import getpass
 import sys
+from getpass import getpass
 
 from smith_ai_mcp import credentials
 

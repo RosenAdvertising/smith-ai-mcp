@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 import requests
-from requests.structures import CaseInsensitiveDict
 from mcp.server.mcpserver.exceptions import ToolError
+from requests.structures import CaseInsensitiveDict
 
 from smith_ai_mcp import client as client_module
 from smith_ai_mcp import server
@@ -19,8 +19,8 @@ from smith_ai_mcp.client import (
     SmithAIClient,
     VendorHTTPError,
 )
-from smith_ai_mcp.setup import verify
 from smith_ai_mcp.setup import setup as setup_cli
+from smith_ai_mcp.setup import verify
 
 
 class RecordingListClient(SmithAIClient):
@@ -263,13 +263,13 @@ def test_setup_secret_prompt_exits_clearly_without_key(
     monkeypatch, capsys, entered, expected
 ):
     monkeypatch.setattr(setup_cli.credentials, "get_secret", lambda _name: None)
-    monkeypatch.setattr(
-        setup_cli,
-        "getpass",
-        lambda _prompt: entered
-        if entered is not None
-        else (_ for _ in ()).throw(EOFError()),
-    )
+
+    def enter_secret(_prompt):
+        if entered is None:
+            raise EOFError
+        return entered
+
+    monkeypatch.setattr(setup_cli, "getpass", enter_secret)
     with pytest.raises(SystemExit) as caught:
         setup_cli.main()
     assert caught.value.code == 1
