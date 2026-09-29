@@ -12,8 +12,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from requests.structures import CaseInsensitiveDict
 
 from smith_ai_mcp import client as client_module
-from smith_ai_mcp import credentials
-from smith_ai_mcp import server
+from smith_ai_mcp import credentials, server
 from smith_ai_mcp.client import (
     AuthenticationError,
     NotFoundError,
