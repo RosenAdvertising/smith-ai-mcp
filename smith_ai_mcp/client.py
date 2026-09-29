@@ -10,13 +10,52 @@ from smith_ai_mcp import credentials
 BASE_URL = "https://api.smith.ai"
 logger = logging.getLogger(__name__)
 
+
+class MissingCredentialsError(RuntimeError):
+    pass
+
+
+class AuthenticationError(RuntimeError):
+    pass
+
+
+class VendorHTTPError(RuntimeError):
+    def __init__(self, status: int, reason: str):
+        self.status = status
+        self.reason = reason
+        super().__init__(reason)
+
+
+class RateLimitError(RuntimeError):
+    def __init__(self, retry_after: int):
+        self.retry_after = retry_after
+        super().__init__("rate_limited")
+
+
+class NotFoundError(RuntimeError):
+    pass
+
+
+class ArgumentValidationError(ValueError):
+    def __init__(self, field: str, expected: str):
+        self.field = field
+        self.expected = expected
+        super().__init__(field)
+
+
+class ContactsValidationError(TypeError):
+    field = "contacts"
+    expected = "an array of contact objects"
+
+
 # Resolve credentials through the pluggable store (OS keyring -> .env file).
 credentials.load_into_environ(["SMITH_API_KEY"])
 
 
 def _retry_after_seconds(resp, default=10):
     try:
-        return int(resp.headers.get("Retry-After", default))
+        value = int(resp.headers.get("Retry-After", default))
+        return value if 0 <= value <= 3600 else default
     except (TypeError, ValueError):
         return default
 
@@ -42,7 +81,7 @@ class SmithAIClient:
             logger.warning(
                 "smith_api_request_rejected", extra={"reason": "missing_api_key"}
             )
-            raise RuntimeError("No Smith.ai API key found. Run: smith-ai-mcp-setup")
+            raise MissingCredentialsError("SMITH_API_KEY")
         self.session = requests.Session()
         self.session.headers.update(
             {
@@ -60,7 +99,7 @@ class SmithAIClient:
                 "smith_api_request_rejected",
                 extra={"reason": "invalid_api_key", "status": 401},
             )
-            raise RuntimeError("Smith.ai API key invalid. Run: smith-ai-mcp-setup")
+            raise AuthenticationError("authentication_rejected")
         if resp.status_code == 429 and _rate_retries < 3:
             wait = _retry_after_seconds(resp)
             print(f"Rate limited. Waiting {wait}s...", file=sys.stderr)
@@ -72,6 +111,10 @@ class SmithAIClient:
                 json_body=json_body,
                 _rate_retries=_rate_retries + 1,
             )
+        if resp.status_code == 429:
+            raise RateLimitError(_retry_after_seconds(resp))
+        if resp.status_code == 404:
+            raise NotFoundError("not_found")
         if resp.status_code == 204:
             return {"success": True}
         if not resp.ok:
@@ -79,7 +122,19 @@ class SmithAIClient:
                 "smith_api_request_rejected",
                 extra={"reason": "upstream_error", "status": resp.status_code},
             )
-            raise RuntimeError(f"Smith.ai API error {resp.status_code}")
+            safe_reasons = {
+                400: "request rejected",
+                403: "access denied",
+                409: "conflict",
+                422: "request rejected",
+                500: "service unavailable",
+                502: "service unavailable",
+                503: "service unavailable",
+                504: "service unavailable",
+            }
+            raise VendorHTTPError(
+                resp.status_code, safe_reasons.get(resp.status_code, "request failed")
+            )
         return _json_response(resp)
 
     def get(self, path, params=None):
@@ -132,7 +187,7 @@ class SmithAIClient:
                 "tool_input_rejected",
                 extra={"field": "contacts", "reason": "invalid_type"},
             )
-            raise TypeError("contacts must be a list")
+            raise ContactsValidationError("contacts must be an array")
         return self.post(
             "/campaigns", body={"name": name, "script": script, "contacts": contacts}
         )

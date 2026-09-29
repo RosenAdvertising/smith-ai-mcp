@@ -10,12 +10,23 @@ configurable voice agent.
 import json
 import logging
 import re
-from typing import Annotated
+from functools import wraps
+from typing import Annotated, Any, cast
 
 from mcp.server import MCPServer
-from pydantic import Field
+from mcp.server.mcpserver.exceptions import ToolError
+from pydantic import Field, ValidationError
 
-from smith_ai_mcp.client import SmithAIClient
+from smith_ai_mcp.client import (
+    AuthenticationError,
+    ArgumentValidationError,
+    ContactsValidationError,
+    MissingCredentialsError,
+    NotFoundError,
+    RateLimitError,
+    SmithAIClient,
+    VendorHTTPError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +38,7 @@ mcp = MCPServer(
         "retrieve call records. Note: Smith.ai uses human receptionists + AI, not a "
         "configurable voice agent."
     ),
+    warn_on_duplicate_tools=False,
 )
 
 
@@ -59,18 +71,16 @@ def _validate_call_text(field_name: str, value: str) -> None:
             "tool_input_rejected",
             extra={"field": field_name, "reason": "length_exceeded"},
         )
-        raise ValueError(
-            f"'{field_name}' exceeds maximum length of {_INSTRUCTIONS_MAX_LEN} characters "
-            f"({len(value)} given). Trim the value before calling this tool."
+        raise ArgumentValidationError(
+            field_name, f"text up to {_INSTRUCTIONS_MAX_LEN} characters"
         )
     if _INJECTION_PATTERNS.search(value):
         logger.warning(
             "tool_input_rejected",
             extra={"field": field_name, "reason": "injection_pattern"},
         )
-        raise ValueError(
-            f"'{field_name}' contains a potential prompt-injection pattern. "
-            "Ensure this value comes from a trusted source, not external/user-retrieved content."
+        raise ArgumentValidationError(
+            field_name, "text without instruction-override patterns"
         )
 
 
@@ -78,13 +88,90 @@ def _client():
     return SmithAIClient()
 
 
+def _safe_tool_errors(function):
+    """Translate anticipated failures to safe, actionable MCP tool errors."""
+
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        try:
+            return function(*args, **kwargs)
+        except MissingCredentialsError:
+            message = "Missing SMITH_API_KEY. Run: smith-ai-mcp-setup"
+        except AuthenticationError:
+            message = (
+                "Smith.ai rejected the API key. Re-authorize with: smith-ai-mcp-setup"
+            )
+        except RateLimitError as exc:
+            message = (
+                f"Smith.ai rate limit reached. Retry after {exc.retry_after} seconds."
+            )
+        except NotFoundError:
+            message = (
+                "The requested Smith.ai resource was not found. Check the resource ID."
+            )
+        except VendorHTTPError as exc:
+            message = f"Smith.ai returned HTTP {exc.status}: {exc.reason}."
+        except ArgumentValidationError as exc:
+            message = f"Invalid argument '{exc.field}': expected {exc.expected}."
+        except ContactsValidationError as exc:
+            message = f"Invalid argument '{exc.field}': expected {exc.expected}."
+        except Exception:
+            logger.warning("tool_error_masked", extra={"reason": "unexpected_error"})
+            message = "Smith.ai tool failed unexpectedly. Check server logs and retry."
+        raise ToolError(message) from None
+
+    return wrapped
+
+
+def _register_safe_tool(function):
+    """Register a safe boundary wrapper while retaining the direct function API."""
+    mcp.tool()(_safe_tool_errors(function))
+    return function
+
+
+def _sanitize_registered_argument_errors() -> None:
+    """Replace Pydantic's input-echoing validation text at the MCP boundary."""
+    manager = mcp._tool_manager
+    for tool in manager.list_tools():
+        parent_model = tool.fn_metadata.arg_model
+
+        def safe_model_validate(cls, value, *, _parent=parent_model, _tool=tool):
+            try:
+                return _parent.model_validate(value)
+            except ValidationError as exc:
+                errors = exc.errors(include_input=False)
+                issue = errors[0] if errors else {}
+                field = str((issue.get("loc") or ("argument",))[0])
+                prop = _tool.parameters.get("properties", {}).get(field, {})
+                expected = prop.get("type", "valid value")
+                if "minimum" in prop:
+                    expected += f" >= {prop['minimum']}"
+                if "maximum" in prop:
+                    expected += f" <= {prop['maximum']}"
+                safe_issue = dict(issue)
+                safe_issue["loc"] = (field,)
+                safe_issue["input"] = None
+                raise ValidationError.from_exception_data(
+                    _tool.name, [cast(Any, safe_issue)]
+                ) from None
+
+        safe_model = type(
+            f"Safe{parent_model.__name__}",
+            (parent_model,),
+            {"model_validate": classmethod(safe_model_validate)},
+        )
+        tool.fn_metadata.arg_model = safe_model
+
+
 @mcp.tool()
+@_register_safe_tool
 def get_account() -> dict:
     """Retrieve Smith.ai account information and settings."""
     return _client().get_account()
 
 
 @mcp.tool()
+@_register_safe_tool
 def list_calls(
     page: PageNumber = 1,
     limit: ListLimit = 25,
@@ -106,6 +193,7 @@ def list_calls(
 
 
 @mcp.tool()
+@_register_safe_tool
 def get_call(call_id: str) -> dict:
     """
     Retrieve a single call record by ID.
@@ -117,6 +205,7 @@ def get_call(call_id: str) -> dict:
 
 
 @mcp.tool()
+@_register_safe_tool
 def request_outbound_call(
     contact_name: str,
     phone_number: str,
@@ -147,6 +236,7 @@ def request_outbound_call(
 
 
 @mcp.tool()
+@_register_safe_tool
 def list_campaigns(page: PageNumber = 1, limit: ListLimit = 25) -> dict:
     """
     List outbound call campaigns.
@@ -159,6 +249,7 @@ def list_campaigns(page: PageNumber = 1, limit: ListLimit = 25) -> dict:
 
 
 @mcp.tool()
+@_register_safe_tool
 def get_campaign(campaign_id: str) -> dict:
     """
     Retrieve details for a single campaign.
@@ -170,6 +261,7 @@ def get_campaign(campaign_id: str) -> dict:
 
 
 @mcp.tool()
+@_register_safe_tool
 def create_campaign(name: str, script: str, contacts: list) -> dict:
     """
     Create a new outbound call campaign.
@@ -188,6 +280,7 @@ def create_campaign(name: str, script: str, contacts: list) -> dict:
 
 
 @mcp.tool()
+@_register_safe_tool
 def update_campaign(
     campaign_id: str,
     name: str = "",
@@ -215,6 +308,7 @@ def update_campaign(
 
 
 @mcp.tool()
+@_register_safe_tool
 def get_campaign_stats(campaign_id: str) -> dict:
     """
     Retrieve performance statistics for a campaign (calls made, completed, outcomes, etc.).
@@ -223,6 +317,9 @@ def get_campaign_stats(campaign_id: str) -> dict:
         campaign_id: The Smith.ai campaign identifier.
     """
     return _client().get_campaign_stats(campaign_id)
+
+
+_sanitize_registered_argument_errors()
 
 
 # ── Resources ─────────────────────────────────────────────────────────────────
