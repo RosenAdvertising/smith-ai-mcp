@@ -52,7 +52,8 @@ smith-ai-mcp-setup
 ```
 
 This prompts for your API key, saves it to your OS keyring (see
-[Credential storage](#credential-storage)), and verifies the connection.
+[Credential storage](#credential-storage)), and verifies the connection. Restart
+the MCP server after setup so it loads the new API key.
 
 Get your API key at: **smith.ai → Dashboard → Settings → API**
 

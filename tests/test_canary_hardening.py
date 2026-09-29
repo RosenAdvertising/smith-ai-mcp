@@ -8,12 +8,19 @@ from typing import Any
 
 import pytest
 import requests
+from requests.structures import CaseInsensitiveDict
 from mcp.server.mcpserver.exceptions import ToolError
 
 from smith_ai_mcp import client as client_module
 from smith_ai_mcp import server
-from smith_ai_mcp.client import SmithAIClient
+from smith_ai_mcp.client import (
+    AuthenticationError,
+    NotFoundError,
+    SmithAIClient,
+    VendorHTTPError,
+)
 from smith_ai_mcp.setup import verify
+from smith_ai_mcp.setup import setup as setup_cli
 
 
 class RecordingListClient(SmithAIClient):
@@ -186,3 +193,154 @@ def test_verify_does_not_print_account_identity(
     assert marker not in output
     assert "Private Person" not in output
     assert "Connected to Smith.ai." in output
+
+
+@pytest.mark.parametrize("status", [400, 404, 405])
+def test_verify_falls_back_by_typed_status(monkeypatch, capsys, status):
+    class StubSmithAIClient:
+        def get_account(self):
+            if status == 404:
+                raise NotFoundError(status)
+            raise VendorHTTPError(status, "request rejected")
+
+        def list_calls(self, **_kwargs):
+            return {"items": []}
+
+    monkeypatch.setattr(client_module, "SmithAIClient", StubSmithAIClient)
+    verify.main()
+    assert "Connected to Smith.ai." in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_verify_does_not_fallback_for_auth_failures(monkeypatch, capsys, status):
+    calls = []
+
+    class StubSmithAIClient:
+        def get_account(self):
+            calls.append("account")
+            if status == 401:
+                raise AuthenticationError("private key text")
+            raise VendorHTTPError(status, "private body")
+
+        def list_calls(self, **_kwargs):
+            calls.append("calls")
+            return {"items": []}
+
+    monkeypatch.setattr(client_module, "SmithAIClient", StubSmithAIClient)
+    with pytest.raises(SystemExit) as caught:
+        verify.main()
+    assert caught.value.code == 1
+    assert calls == ["account"]
+    assert "private" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("first_status", [400, 404, 405])
+def test_verify_real_fake_http_status_fallback(first_status, monkeypatch, capsys):
+    monkeypatch.setenv("SMITH_API_KEY", "fake-test-key")
+    responses = [
+        FakeResponse(first_status, "private vendor body"),
+        FakeResponse(200, "{}"),
+    ]
+
+    class Session(FakeSession):
+        def __init__(self):
+            self.headers = CaseInsensitiveDict()
+
+        def request(self, *_args, **_kwargs):
+            return responses.pop(0)
+
+    monkeypatch.setattr(client_module.requests, "Session", Session)
+    verify.main()
+    assert "Connected to Smith.ai." in capsys.readouterr().out
+    assert responses == []
+
+
+@pytest.mark.parametrize(
+    ("entered", "expected"),
+    [("", "No API key provided"), (None, "Setup cancelled")],
+)
+def test_setup_secret_prompt_exits_clearly_without_key(
+    monkeypatch, capsys, entered, expected
+):
+    monkeypatch.setattr(setup_cli.credentials, "get_secret", lambda _name: None)
+    monkeypatch.setattr(
+        setup_cli,
+        "getpass",
+        lambda _prompt: entered
+        if entered is not None
+        else (_ for _ in ()).throw(EOFError()),
+    )
+    with pytest.raises(SystemExit) as caught:
+        setup_cli.main()
+    assert caught.value.code == 1
+    assert expected in capsys.readouterr().out
+
+
+def test_setup_bad_key_exits_without_traceback(monkeypatch, capsys):
+    monkeypatch.setattr(setup_cli.credentials, "get_secret", lambda _name: None)
+    monkeypatch.setattr(setup_cli, "getpass", lambda _prompt: "fake-invalid-key")
+    monkeypatch.setattr(setup_cli.credentials, "set_secret", lambda *_args: "env")
+
+    class BadKeyClient:
+        def get_account(self):
+            raise AuthenticationError("fake key rejected")
+
+    monkeypatch.setattr(client_module, "SmithAIClient", BadKeyClient)
+    with pytest.raises(SystemExit) as caught:
+        setup_cli.main()
+    assert caught.value.code == 1
+    output = capsys.readouterr().out
+    assert "verification failed" in output
+    assert "Traceback" not in output
+
+
+def test_resource_error_boundary_masks_exception_chain(monkeypatch, caplog):
+    marker = "Bearer fake-resource-secret https://private.invalid/key"
+
+    class FailingClient:
+        def list_calls(self, **_kwargs):
+            raise RuntimeError(marker)
+
+    monkeypatch.setattr(server, "_client", FailingClient)
+
+    async def run():
+        with pytest.raises(Exception) as caught:
+            await server.mcp.read_resource("smith-ai://recent_calls")
+        return caught.value
+
+    with caplog.at_level(logging.WARNING):
+        error = asyncio.run(run())
+    assert str(error) == "Error reading Smith.ai resource."
+    assert marker not in caplog.text
+    assert error.__cause__ is None
+    assert marker not in repr(error.__context__)
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "expected"),
+    [
+        ("get_call", "calls/..%2Fx", "/calls/..%2Fx"),
+        ("get_campaign", "campaigns/..%2Fx", "/campaigns/..%2Fx"),
+        ("update_campaign", "campaigns/..%2Fx", "/campaigns/..%2Fx"),
+        ("get_campaign_stats", "campaigns/..%2Fx/stats", "/campaigns/..%2Fx/stats"),
+    ],
+)
+def test_path_ids_are_escaped_as_one_segment(monkeypatch, method, path, expected):
+    instance = object.__new__(SmithAIClient)
+    instance.session = requests.Session()
+    seen = {}
+    response = FakeResponse(200, "{}")
+
+    def request(_method, url, **_kwargs):
+        seen["url"] = url
+        return response
+
+    monkeypatch.setattr(instance.session, "request", request)
+    if method == "update_campaign":
+        instance.update_campaign("../x")
+    elif method == "get_campaign_stats":
+        instance.get_campaign_stats("../x")
+    else:
+        getattr(instance, method)("../x")
+    assert seen["url"].endswith(expected)
+    assert path in seen["url"]

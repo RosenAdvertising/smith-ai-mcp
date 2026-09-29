@@ -41,10 +41,12 @@ uv lock --check --offline
 The tests use fake Smith.ai responses and an in-process protocol transport.
 These commands make no live Smith.ai requests.
 
-## Open product decision
+## Public error behavior
 
-MCP 2.2.0 masks exception messages from tools unless they raise `ToolError` or
-`ResourceError`. Retaining that masking limits leakage; explicitly safe
-`ToolError` messages would give clients more actionable feedback. Toby must
-decide which errors, if any, should use the latter. Existing exception
-handling is unchanged.
+Tool failures return MCP error results with `isError=true`. The server exposes
+fixed, classified messages for missing credentials, authentication rejection,
+access denial, rate limits, not-found responses, known HTTP failures, transport
+failures, and safe argument validation. Unknown failures use the generic text
+`Error executing tool <name>`; exception text, request URLs, credentials, and
+vendor response bodies are not included. Resource failures use a fixed public
+message and do not expose the underlying exception.

@@ -1,7 +1,8 @@
 import logging
+import math
 import os
-import sys
 import time
+from urllib.parse import quote
 
 import requests
 
@@ -9,6 +10,10 @@ from smith_ai_mcp import credentials
 
 BASE_URL = "https://api.smith.ai"
 logger = logging.getLogger(__name__)
+ACCESS_DENIED_MESSAGE = (
+    "Smith.ai access denied: the connected account lacks permission for this action "
+    "(or the authorization expired; re-run smith-ai-mcp-setup if so)."
+)
 
 
 class MissingCredentialsError(RuntimeError):
@@ -33,7 +38,22 @@ class RateLimitError(RuntimeError):
 
 
 class NotFoundError(RuntimeError):
-    pass
+    def __init__(self, status: int = 404):
+        self.status = status
+        super().__init__("not_found")
+
+
+class TransportError(RuntimeError):
+    def __init__(self, method: str):
+        self.method = method.upper()
+        if self.method == "GET":
+            message = "Smith.ai could not be reached. Check connectivity and retry."
+        else:
+            message = (
+                "Smith.ai could not be reached while submitting this change; the "
+                "outcome is unknown. Check whether it completed before retrying."
+            )
+        super().__init__(message)
 
 
 class ArgumentValidationError(ValueError):
@@ -54,10 +74,12 @@ credentials.load_into_environ(["SMITH_API_KEY"])
 
 def _retry_after_seconds(resp, default=10):
     try:
-        value = int(resp.headers.get("Retry-After", default))
-        return value if 1 <= value <= 3600 else default
-    except (TypeError, ValueError):
-        return default
+        value = float(resp.headers.get("Retry-After", default))
+        if math.isfinite(value) and value >= 1:
+            return math.ceil(value)
+    except (TypeError, ValueError, OverflowError):
+        pass
+    return default
 
 
 _SAFE_HTTP_REASONS = {
@@ -126,18 +148,36 @@ class SmithAIClient:
             }
         )
 
-    def _request(self, method, path, params=None, json_body=None, _rate_retries=0):
+    def _request(
+        self, method, path, params=None, json_body=None, _rate_retries=0, _retry_sleep=0
+    ):
         url = f"{BASE_URL}/{path.lstrip('/')}"
-        resp = self.session.request(method, url, params=params, json=json_body)
-        if resp.status_code in (401, 403):
+        try:
+            resp = self.session.request(
+                method, url, params=params, json=json_body, timeout=30
+            )
+        except (requests.Timeout, requests.ConnectionError):
+            logger.warning(
+                "smith_api_request_failed",
+                extra={"reason": "transport_error", "method": method.upper()},
+            )
+            raise TransportError(method) from None
+        if resp.status_code == 401:
             logger.warning(
                 "smith_api_request_rejected",
-                extra={"reason": "invalid_api_key", "status": resp.status_code},
+                extra={"reason": "unauthorized", "status": resp.status_code},
             )
             raise AuthenticationError("authentication_rejected")
+        if resp.status_code == 403:
+            logger.warning(
+                "smith_api_request_rejected",
+                extra={"reason": "access_denied", "status": resp.status_code},
+            )
+            raise VendorHTTPError(403, ACCESS_DENIED_MESSAGE)
         if resp.status_code == 429 and _rate_retries < 3:
             wait = _retry_after_seconds(resp)
-            print(f"Rate limited. Waiting {wait}s...", file=sys.stderr)
+            if _retry_sleep + wait > 60:
+                raise RateLimitError(wait)
             time.sleep(wait)
             return self._request(
                 method,
@@ -145,11 +185,12 @@ class SmithAIClient:
                 params=params,
                 json_body=json_body,
                 _rate_retries=_rate_retries + 1,
+                _retry_sleep=_retry_sleep + wait,
             )
         if resp.status_code == 429:
             raise RateLimitError(_retry_after_seconds(resp))
         if resp.status_code == 404:
-            raise NotFoundError("not_found")
+            raise NotFoundError(resp.status_code)
         if resp.status_code == 204:
             return {"success": True}
         if not resp.ok:
@@ -183,7 +224,7 @@ class SmithAIClient:
         return self.get("/calls", params=params)
 
     def get_call(self, call_id):
-        return self.get(f"/calls/{call_id}")
+        return self.get(f"/calls/{quote(str(call_id), safe='')}")
 
     def request_outbound_call(
         self, contact_name, phone_number, instructions="", priority="normal"
@@ -202,7 +243,7 @@ class SmithAIClient:
         return self.get("/campaigns", params={"page": page, "limit": limit})
 
     def get_campaign(self, campaign_id):
-        return self.get(f"/campaigns/{campaign_id}")
+        return self.get(f"/campaigns/{quote(str(campaign_id), safe='')}")
 
     def create_campaign(self, name, script, contacts):
         if not isinstance(contacts, list):
@@ -223,7 +264,7 @@ class SmithAIClient:
             body["script"] = script
         if status:
             body["status"] = status
-        return self.patch(f"/campaigns/{campaign_id}", body=body)
+        return self.patch(f"/campaigns/{quote(str(campaign_id), safe='')}", body=body)
 
     def get_campaign_stats(self, campaign_id):
-        return self.get(f"/campaigns/{campaign_id}/stats")
+        return self.get(f"/campaigns/{quote(str(campaign_id), safe='')}/stats")
