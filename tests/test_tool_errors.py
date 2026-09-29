@@ -328,6 +328,12 @@ def test_large_retry_hint_crosses_actual_mcp_result_without_sleep(monkeypatch):
     ("status", "body", "header", "expected"),
     [
         (
+            302,
+            {"message": "private@example.invalid"},
+            "7",
+            "Smith.ai returned HTTP 302: redirect rejected.",
+        ),
+        (
             401,
             {"message": "private@example.invalid"},
             "7",
