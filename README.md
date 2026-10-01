@@ -129,6 +129,9 @@ falls back to a `~/.smith-ai-mcp/.env` file with `0600` permissions:
 SMITH_API_KEY=your_api_key
 ```
 
+On Windows, the OS credential store is used; the file fallback is not supported
+because private secret-file writes require `os.fchmod`.
+
 **Read order.** Values resolve in the order OS keyring → process environment →
 `.env` file. So a rotated key in the keyring always wins, and a value exported in
 your shell overrides the file fallback without touching the keyring.
@@ -148,5 +151,6 @@ an encrypted file backend, or a cloud backend, then select it with the standard
 - Rate limiting: automatic retry up to 3 times, respecting `Retry-After` headers.
 
 `update_campaign` requires at least one non-empty `name`, `script`, or `status`.
-The accepted status values are the values documented by this tool: `active`,
-`paused`, and `completed`. Unknown statuses are rejected before making a request.
+A supplied `status` may be any non-empty string of at most 128 characters,
+with no control characters. Whitespace-only statuses are rejected; statuses
+are not restricted to a fixed set of values.
