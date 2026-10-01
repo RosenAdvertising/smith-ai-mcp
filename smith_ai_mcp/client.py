@@ -1,6 +1,7 @@
 import logging
 import math
 import os
+import re
 import time
 from urllib.parse import quote
 
@@ -14,6 +15,21 @@ ACCESS_DENIED_MESSAGE = (
     "Smith.ai access denied: the connected account lacks permission for this action "
     "(or the authorization expired; re-run smith-ai-mcp-setup if so)."
 )
+
+
+def _path_id(value, parameter: str) -> str:
+    """Validate a plain identifier before URL quoting or any HTTP request."""
+    expected = (
+        "a non-empty plain identifier (ASCII letters, digits, -, _, ., ~); not . or .."
+    )
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (str, int))
+        or str(value) in {".", ".."}
+        or re.fullmatch(r"[A-Za-z0-9._~-]+", str(value)) is None
+    ):
+        raise ArgumentValidationError(parameter, expected)
+    return quote(str(value), safe="")
 
 
 class MissingCredentialsError(RuntimeError):
@@ -235,7 +251,7 @@ class SmithAIClient:
         return self.get("/calls", params=params)
 
     def get_call(self, call_id):
-        return self.get(f"/calls/{quote(str(call_id), safe='')}")
+        return self.get(f"/calls/{_path_id(call_id, 'call_id')}")
 
     def request_outbound_call(
         self, contact_name, phone_number, instructions="", priority="normal"
@@ -254,7 +270,7 @@ class SmithAIClient:
         return self.get("/campaigns", params={"page": page, "limit": limit})
 
     def get_campaign(self, campaign_id):
-        return self.get(f"/campaigns/{quote(str(campaign_id), safe='')}")
+        return self.get(f"/campaigns/{_path_id(campaign_id, 'campaign_id')}")
 
     def create_campaign(self, name, script, contacts):
         if not isinstance(contacts, list):
@@ -275,7 +291,9 @@ class SmithAIClient:
             body["script"] = script
         if status:
             body["status"] = status
-        return self.patch(f"/campaigns/{quote(str(campaign_id), safe='')}", body=body)
+        return self.patch(
+            f"/campaigns/{_path_id(campaign_id, 'campaign_id')}", body=body
+        )
 
     def get_campaign_stats(self, campaign_id):
-        return self.get(f"/campaigns/{quote(str(campaign_id), safe='')}/stats")
+        return self.get(f"/campaigns/{_path_id(campaign_id, 'campaign_id')}/stats")

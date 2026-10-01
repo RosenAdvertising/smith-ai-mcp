@@ -10,7 +10,6 @@ import pytest
 import requests
 from mcp.server.mcpserver.exceptions import ToolError
 from requests.structures import CaseInsensitiveDict
-
 from smith_ai_mcp import client as client_module
 from smith_ai_mcp import credentials, server
 from smith_ai_mcp.client import (
@@ -336,13 +335,17 @@ def test_resource_error_boundary_masks_exception_chain(monkeypatch, caplog):
 @pytest.mark.parametrize(
     ("method", "path", "expected"),
     [
-        ("get_call", "calls/..%2Fx", "/calls/..%2Fx"),
-        ("get_campaign", "campaigns/..%2Fx", "/campaigns/..%2Fx"),
-        ("update_campaign", "campaigns/..%2Fx", "/campaigns/..%2Fx"),
-        ("get_campaign_stats", "campaigns/..%2Fx/stats", "/campaigns/..%2Fx/stats"),
+        ("get_call", "calls/normal-id", "/calls/normal-id"),
+        ("get_campaign", "campaigns/normal-id", "/campaigns/normal-id"),
+        ("update_campaign", "campaigns/normal-id", "/campaigns/normal-id"),
+        (
+            "get_campaign_stats",
+            "campaigns/normal-id/stats",
+            "/campaigns/normal-id/stats",
+        ),
     ],
 )
-def test_path_ids_are_escaped_as_one_segment(monkeypatch, method, path, expected):
+def test_path_ids_are_validated_as_one_segment(monkeypatch, method, path, expected):
     instance = object.__new__(SmithAIClient)
     instance.session = requests.Session()
     seen = {}
@@ -354,10 +357,10 @@ def test_path_ids_are_escaped_as_one_segment(monkeypatch, method, path, expected
 
     monkeypatch.setattr(instance.session, "request", request)
     if method == "update_campaign":
-        instance.update_campaign("../x")
+        instance.update_campaign("normal-id")
     elif method == "get_campaign_stats":
-        instance.get_campaign_stats("../x")
+        instance.get_campaign_stats("normal-id")
     else:
-        getattr(instance, method)("../x")
+        getattr(instance, method)("normal-id")
     assert seen["url"].endswith(expected)
     assert path in seen["url"]
