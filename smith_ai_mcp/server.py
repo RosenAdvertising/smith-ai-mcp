@@ -292,6 +292,9 @@ def update_campaign(
             and 2,000-character restrictions as create_campaign apply.
         status: New status, e.g. 'active', 'paused', 'completed' (optional).
     """
+    from smith_ai_mcp.client import validate_campaign_update
+
+    validate_campaign_update(name, script, status)
     if script:
         _validate_call_text("script", script)
     return _client().update_campaign(

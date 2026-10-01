@@ -284,6 +284,8 @@ class SmithAIClient:
         )
 
     def update_campaign(self, campaign_id, name="", script="", status=""):
+        path = f"/campaigns/{_path_id(campaign_id, 'campaign_id')}"
+        validate_campaign_update(name, script, status)
         body = {}
         if name:
             body["name"] = name
@@ -291,9 +293,22 @@ class SmithAIClient:
             body["script"] = script
         if status:
             body["status"] = status
-        return self.patch(
-            f"/campaigns/{_path_id(campaign_id, 'campaign_id')}", body=body
-        )
+        return self.patch(path, body=body)
 
     def get_campaign_stats(self, campaign_id):
         return self.get(f"/campaigns/{_path_id(campaign_id, 'campaign_id')}/stats")
+
+
+def validate_campaign_update(name, script, status):
+    if not any(value.strip() for value in (name, script, status)):
+        raise ArgumentValidationError(
+            "update", "at least one non-empty name, script, or status"
+        )
+    if status and (
+        not status.strip()
+        or len(status) > 128
+        or any(ord(char) < 32 or ord(char) == 127 for char in status)
+    ):
+        raise ArgumentValidationError(
+            "status", "a non-empty string of at most 128 characters without controls"
+        )

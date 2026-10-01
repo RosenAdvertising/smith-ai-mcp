@@ -146,3 +146,7 @@ an encrypted file backend, or a cloud backend, then select it with the standard
 - Smith.ai's API documentation is minimal. Endpoint paths are based on docs.smith.ai — verify against your account before relying on them in production.
 - The `/account` endpoint may not exist in all plans; the verify script falls back to `list_calls` if it fails.
 - Rate limiting: automatic retry up to 3 times, respecting `Retry-After` headers.
+
+`update_campaign` requires at least one non-empty `name`, `script`, or `status`.
+The accepted status values are the values documented by this tool: `active`,
+`paused`, and `completed`. Unknown statuses are rejected before making a request.

@@ -357,7 +357,7 @@ def test_path_ids_are_validated_as_one_segment(monkeypatch, method, path, expect
 
     monkeypatch.setattr(instance.session, "request", request)
     if method == "update_campaign":
-        instance.update_campaign("normal-id")
+        instance.update_campaign("normal-id", name="probe")
     elif method == "get_campaign_stats":
         instance.get_campaign_stats("normal-id")
     else:
