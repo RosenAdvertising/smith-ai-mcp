@@ -9,10 +9,12 @@
 <!-- prettier-ignore -->
 > [!IMPORTANT]
 > **Built to spec — not yet verified against a live Smith.ai account.**
-> This server was built from Smith.ai's public API documentation and passes its full offline test suite, but we don't currently have Smith.ai API access to verify behavior against the live API. Endpoint paths, parameters, and response shapes follow the documented spec. If you hit a discrepancy, please open an issue.
+> This server was built from Smith.ai's public API documentation and includes offline tests, but we don't currently have Smith.ai API access to verify behavior against the live API. Endpoint paths, parameters, and response shapes follow the documented spec. If you hit a discrepancy, please open an issue.
 > Smith.ai's public API documentation is minimal; endpoint paths are based on docs.smith.ai and are low-confidence. Treat this server as experimental until verified against a live account.
 
 MCP server for [Smith.ai](https://smith.ai) — outbound call requests, campaign management, and call record retrieval.
+
+Requires Python MCP SDK `>=2.2,<3` for the MCP 2026-07-28 protocol support.
 
 ## What Smith.ai is (and isn't)
 
@@ -50,7 +52,8 @@ smith-ai-mcp-setup
 ```
 
 This prompts for your API key, saves it to your OS keyring (see
-[Credential storage](#credential-storage)), and verifies the connection.
+[Credential storage](#credential-storage)), and verifies the connection. Restart
+the MCP server after setup so it loads the new API key.
 
 Get your API key at: **smith.ai → Dashboard → Settings → API**
 
@@ -126,6 +129,10 @@ falls back to a `~/.smith-ai-mcp/.env` file with `0600` permissions:
 SMITH_API_KEY=your_api_key
 ```
 
+On Windows, the file is stored in the user's profile and protected by Windows'
+default per-user access rules. On POSIX, files are created with `0600` permissions
+and writes fail closed if private permissions cannot be established.
+
 **Read order.** Values resolve in the order OS keyring → process environment →
 `.env` file. So a rotated key in the keyring always wins, and a value exported in
 your shell overrides the file fallback without touching the keyring.
@@ -143,3 +150,8 @@ an encrypted file backend, or a cloud backend, then select it with the standard
 - Smith.ai's API documentation is minimal. Endpoint paths are based on docs.smith.ai — verify against your account before relying on them in production.
 - The `/account` endpoint may not exist in all plans; the verify script falls back to `list_calls` if it fails.
 - Rate limiting: automatic retry up to 3 times, respecting `Retry-After` headers.
+
+`update_campaign` requires at least one non-empty `name`, `script`, or `status`.
+A supplied `status` may be any non-empty string of at most 128 characters,
+with no control characters. Whitespace-only statuses are rejected; statuses
+are not restricted to a fixed set of values.

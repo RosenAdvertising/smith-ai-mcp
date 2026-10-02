@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Pluggable credential storage for smith-ai-mcp.
 
 Secrets (API keys, tokens, passwords) are stored in the operating system's
@@ -24,15 +23,19 @@ See https://github.com/jaraco/keyring#configuring for details.
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Any
+
+from smith_ai_mcp.private_file import write_private_file
 
 # --- per-MCP configuration --------------------------------------------------
 SERVICE_NAME = "smith-ai-mcp"
 CONFIG_DIR = Path.home() / ".smith-ai-mcp"
 ENV_FILE = CONFIG_DIR / ".env"
 _USE_KEYRING_FLAG = "SMITH_AI_MCP_USE_KEYRING"
+logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 # keyring is an optional-at-runtime dependency: import defensively so a missing
@@ -71,9 +74,7 @@ def _keyring_enabled() -> bool:
         return False
     # keyring.backends.fail.Keyring / .null.Keyring are non-functional sentinels.
     cls = backend.__class__.__module__ + "." + backend.__class__.__name__
-    if "fail." in cls or "null." in cls:
-        return False
-    return True
+    return not ("fail." in cls or "null." in cls)
 
 
 def _read_env_file() -> dict[str, str]:
@@ -91,17 +92,16 @@ def _read_env_file() -> dict[str, str]:
 
 def _write_env_file(values: dict[str, str]) -> None:
     """Write the fallback ``.env`` file with 0600 perms in a 0700 dir."""
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    try:
-        CONFIG_DIR.chmod(0o700)
-    except OSError:
-        pass
+    CONFIG_DIR.mkdir(
+        mode=0o777 if os.name == "nt" else 0o700, parents=True, exist_ok=True
+    )
+    if os.name != "nt":
+        try:
+            CONFIG_DIR.chmod(0o700)
+        except OSError:
+            pass
     lines = [f"{k}={v}" for k, v in values.items()]
-    ENV_FILE.write_text("\n".join(lines) + ("\n" if lines else ""))
-    try:
-        ENV_FILE.chmod(0o600)
-    except OSError:
-        pass
+    write_private_file(ENV_FILE, "\n".join(lines) + ("\n" if lines else ""))
 
 
 def get_secret(key: str, default: str = "") -> str:
@@ -159,8 +159,11 @@ def delete_secret(key: str) -> None:
     if _keyring_enabled():
         try:
             keyring.delete_password(SERVICE_NAME, key)
-        except Exception:  # noqa: BLE001 - missing entry is fine
-            pass
+        except Exception:  # noqa: BLE001 - missing entry/backend is non-fatal
+            logger.debug(
+                "keyring_delete_skipped",
+                extra={"reason": "entry_missing_or_backend_error"},
+            )
     existing = _read_env_file()
     if key in existing:
         existing.pop(key, None)

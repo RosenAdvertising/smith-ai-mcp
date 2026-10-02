@@ -1,9 +1,9 @@
-#!/usr/bin/env python3
 """
 smith-ai-mcp setup — configure API key and verify connection.
 """
 
 import sys
+from getpass import getpass
 
 from smith_ai_mcp import credentials
 
@@ -18,17 +18,12 @@ def main():
     existing_key = credentials.get_secret("SMITH_API_KEY")
 
     if existing_key:
-        masked = (
-            existing_key[:4] + "..." + existing_key[-4:]
-            if len(existing_key) > 8
-            else "****"
-        )
-        prompt = f"API key [{masked}] (press Enter to keep): "
+        prompt = "API key configured (press Enter to keep): "
     else:
         prompt = "Enter your Smith.ai API key: "
 
     try:
-        api_key = input(prompt).strip()
+        api_key = getpass(prompt).strip()
     except (KeyboardInterrupt, EOFError):
         print("\nSetup cancelled.")
         sys.exit(1)
@@ -47,6 +42,7 @@ def main():
         print(f"API key saved to the OS keyring ({credentials.storage_backend()}).")
     else:
         print(f"API key saved to {credentials.ENV_FILE} (0600).")
+    print("Restart smith-ai-mcp so it loads the new API key.")
     print()
 
     # Run verify

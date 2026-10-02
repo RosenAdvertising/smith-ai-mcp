@@ -1,5 +1,12 @@
-#!/usr/bin/env python3
 import sys
+
+from smith_ai_mcp.client import (
+    ACCESS_DENIED_MESSAGE,
+    AuthenticationError,
+    MissingCredentialsError,
+    NotFoundError,
+    VendorHTTPError,
+)
 
 
 def main():
@@ -9,30 +16,26 @@ def main():
         client = SmithAIClient()
         connected = False
         try:
-            info = client.get_account()
+            client.get_account()
             connected = True
-            if isinstance(info, dict):
-                name = (
-                    info.get("name")
-                    or info.get("account_name")
-                    or info.get("email", "")
-                )
-                if name:
-                    print(f"Account: {name}")
-        except RuntimeError as e:
-            msg = str(e)
-            if not any(code in msg for code in ("400", "404", "405")):
+        except (NotFoundError, VendorHTTPError) as exc:
+            if exc.status not in (400, 404, 405):
                 raise
         if not connected:
-            try:
-                client.list_calls(limit=1)
-                connected = True
-            except Exception as e2:
-                raise RuntimeError(str(e2))
+            client.list_calls(limit=1)
         print("Connected to Smith.ai.")
         print("smith-ai-mcp is ready.")
-    except Exception as e:
-        print(f"Error: {e}")
+    except (MissingCredentialsError, AuthenticationError, VendorHTTPError) as exc:
+        if isinstance(exc, VendorHTTPError) and exc.status == 403:
+            message = ACCESS_DENIED_MESSAGE
+        elif isinstance(exc, MissingCredentialsError):
+            message = "Missing SMITH_API_KEY. Run smith-ai-mcp-setup and restart the MCP server."
+        else:
+            message = "Smith.ai verification failed. Check your API key and re-run smith-ai-mcp-setup."
+        print(f"Error: {message}")
+        sys.exit(1)
+    except Exception:  # noqa: BLE001 - final CLI boundary exits safely
+        print("Error: Smith.ai verification failed.")
         print("Run smith-ai-mcp-setup to configure your API key.")
         sys.exit(1)
 
