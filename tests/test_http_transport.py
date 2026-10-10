@@ -284,3 +284,46 @@ def test_stateless_lifespan_runs_once_for_two_requests() -> None:
     finally:
         server.mcp._lowlevel_server.lifespan = original
     assert calls["n"] == 1
+
+
+def test_empty_transport_selects_stdio(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for raw in ("", "   "):
+        monkeypatch.setenv("SMITH_AI_MCP_TRANSPORT", raw)
+        assert server._requested_transport() == "stdio"
+    monkeypatch.setenv("SMITH_AI_MCP_TRANSPORT", "")
+    called: list[str] = []
+    monkeypatch.setattr(server.mcp, "run", lambda: called.append("stdio"))
+    server.main()
+    assert called == ["stdio"]
+
+
+def test_empty_host_yields_loopback(monkeypatch: pytest.MonkeyPatch) -> None:
+    for raw in ("", "   "):
+        monkeypatch.setenv("SMITH_AI_MCP_HOST", raw)
+        assert server._host() == "127.0.0.1"
+
+
+def test_uppercase_localhost_is_non_loopback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SMITH_AI_MCP_HOST", "LOCALHOST")
+    assert server._host() == "LOCALHOST"
+    with pytest.raises(SystemExit) as caught:
+        server.create_serve_app()
+    assert "SMITH_AI_MCP_ALLOWED_HOSTS" in str(caught.value)
+
+
+def test_server_import_survives_missing_distribution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import importlib
+    import importlib.metadata
+
+    def _missing(*_args: object, **_kwargs: object) -> str:
+        raise importlib.metadata.PackageNotFoundError()
+
+    monkeypatch.setattr(importlib.metadata, "version", _missing)
+    reloaded = importlib.reload(server)
+    assert reloaded is server

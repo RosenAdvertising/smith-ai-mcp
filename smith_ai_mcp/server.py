@@ -437,9 +437,7 @@ def _requested_transport() -> str:
 
 
 def _host() -> str:
-    return (
-        os.environ.get("SMITH_AI_MCP_HOST", "127.0.0.1").strip().lower() or "127.0.0.1"
-    )
+    return os.environ.get("SMITH_AI_MCP_HOST", "127.0.0.1").strip() or "127.0.0.1"
 
 
 def _port() -> int:
