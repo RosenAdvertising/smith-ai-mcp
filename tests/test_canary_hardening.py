@@ -1,4 +1,4 @@
-"""Regressions for fleet canary findings A, B, and D."""
+"""Regressions for pre-release canary findings A, B, and D."""
 
 from __future__ import annotations
 
