@@ -14,7 +14,7 @@
 
 MCP server for [Smith.ai](https://smith.ai) — outbound call requests, campaign management, and call record retrieval.
 
-Requires Python MCP SDK `>=2.2,<3` for the MCP 2026-07-28 protocol support.
+Requires Python MCP SDK `>=2.3,<3` for the MCP 2026-07-28 protocol support.
 
 ## What Smith.ai is (and isn't)
 
@@ -77,6 +77,38 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
     }
   }
 }
+```
+
+---
+
+## HTTP mode
+
+Stdio stays the default. Set `SMITH_AI_MCP_TRANSPORT=streamable-http` to serve
+stateless Streamable HTTP (MCP 2026-07-28) at `POST /mcp`. Credentials are the
+same environment variables as stdio. The server never reads them from the
+request.
+
+| Variable                       | Default     | Purpose                                                                    |
+| ------------------------------ | ----------- | -------------------------------------------------------------------------- |
+| `SMITH_AI_MCP_TRANSPORT`       | `stdio`     | `stdio` or `streamable-http`                                               |
+| `SMITH_AI_MCP_HOST`            | `127.0.0.1` | Bind address. `127.0.0.1`, `localhost`, and `::1` are loopback             |
+| `PORT`                         | `8080`      | Bind port. A non-integer value exits                                       |
+| `SMITH_AI_MCP_ALLOWED_HOSTS`   |             | Comma-separated Host values. Required when the bind address is not loopback |
+| `SMITH_AI_MCP_ALLOWED_ORIGINS` |             | Optional comma-separated Origin values checked with those hosts           |
+| `SMITH_API_KEY`                |             | Smith.ai bearer token                                                      |
+| `SMITH_AI_MCP_USE_KEYRING`     | `1`         | Set to `0` to skip the OS keyring and use the `~/.smith-ai-mcp/.env` file |
+
+```bash
+SMITH_AI_MCP_TRANSPORT=streamable-http PORT=8080 smith-ai-mcp
+```
+
+```bash
+curl -sS http://127.0.0.1:8080/mcp \
+  -H 'Accept: application/json, text/event-stream' \
+  -H 'Content-Type: application/json' \
+  -H 'MCP-Protocol-Version: 2026-07-28' \
+  -H 'MCP-Method: tools/list' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{},"io.modelcontextprotocol/clientInfo":{"name":"curl","version":"0"}}}}'
 ```
 
 ---

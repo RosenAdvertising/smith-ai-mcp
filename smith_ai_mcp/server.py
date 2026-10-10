@@ -7,8 +7,10 @@ retrieve call records. Note: Smith.ai uses human receptionists + AI, not a
 configurable voice agent.
 """
 
+import asyncio
 import json
 import logging
+import os
 import re
 from typing import Annotated
 
@@ -19,8 +21,10 @@ from mcp.server.mcpserver.exceptions import (
     ToolError,
     UnexpectedToolError,
 )
+from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import Field, ValidationError
 
+from smith_ai_mcp import __version__
 from smith_ai_mcp.client import (
     ACCESS_DENIED_MESSAGE,
     ArgumentValidationError,
@@ -111,6 +115,8 @@ class SafeMCPServer(MCPServer):
 
 mcp = SafeMCPServer(
     "smith-ai",
+    title="Smith.ai",
+    version=__version__,
     instructions=(
         "Smith.ai human+AI hybrid receptionist integration: request outbound calls "
         "(Smith places calls via their receptionist team), manage outreach campaigns, "
@@ -422,8 +428,86 @@ def call_outcome_summary(date_from: str, date_to: str) -> str:
 6. End with: total calls, connected %, and any anomalies worth escalating."""
 
 
+STREAMABLE_HTTP_TRANSPORT = "streamable-http"
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
+def _requested_transport() -> str:
+    return os.environ.get("SMITH_AI_MCP_TRANSPORT", "stdio").strip().lower() or "stdio"
+
+
+def _host() -> str:
+    return (
+        os.environ.get("SMITH_AI_MCP_HOST", "127.0.0.1").strip().lower() or "127.0.0.1"
+    )
+
+
+def _port() -> int:
+    raw = os.environ.get("PORT", "8080").strip()
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise SystemExit(f"PORT must be an integer, got {raw!r}") from exc
+
+
+def _csv_env(name: str) -> list[str]:
+    return [
+        item.strip() for item in os.environ.get(name, "").split(",") if item.strip()
+    ]
+
+
+def _transport_security() -> TransportSecuritySettings | None:
+    host = _host()
+    if host in _LOOPBACK_HOSTS:
+        return None
+    allowed_hosts = _csv_env("SMITH_AI_MCP_ALLOWED_HOSTS")
+    if not allowed_hosts:
+        raise SystemExit(
+            "SMITH_AI_MCP_ALLOWED_HOSTS is required when SMITH_AI_MCP_HOST "
+            f"is {host!r} (not a loopback address)."
+        )
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=allowed_hosts,
+        allowed_origins=_csv_env("SMITH_AI_MCP_ALLOWED_ORIGINS"),
+    )
+
+
+def create_serve_app():
+    # json_response stays at the SDK default (SSE) so a disconnect cancels the request.
+    return mcp.streamable_http_app(
+        streamable_http_path="/mcp",
+        host=_host(),
+        stateless_http=True,
+        transport_security=_transport_security(),
+    )
+
+
+async def _serve_streamable_http() -> None:
+    import uvicorn
+
+    config = uvicorn.Config(
+        create_serve_app(),
+        host=_host(),
+        port=_port(),
+        log_level=mcp.settings.log_level.lower(),
+        access_log=False,
+    )
+    await uvicorn.Server(config).serve()
+
+
 def main():
-    mcp.run()
+    transport = _requested_transport()
+    if transport == "stdio":
+        mcp.run()
+        return
+    if transport == STREAMABLE_HTTP_TRANSPORT:
+        asyncio.run(_serve_streamable_http())
+        return
+    raise SystemExit(
+        "Unsupported SMITH_AI_MCP_TRANSPORT "
+        f"{transport!r}; expected 'stdio' or '{STREAMABLE_HTTP_TRANSPORT}'."
+    )
 
 
 if __name__ == "__main__":
